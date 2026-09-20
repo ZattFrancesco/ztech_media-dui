@@ -77,6 +77,43 @@ function applyFilter(player) {
  * rend muette, on appuie sur « Passer » des qu'il parait, et on l'envoie a
  * sa fin pour celles qui ne se passent pas. Le volume reste a zero tant
  * qu'elle est la : update() le lit. */
+var AD_MARKERS = [
+    '.ytp-ad-player-overlay', '.ytp-ad-player-overlay-layout', '.ytp-ad-text', '.ytp-ad-preview-container',
+    '.ytp-ad-preview-text', '.ytp-skip-ad-button', '.ytp-ad-skip-button', '.ytp-ad-skip-button-modern',
+    '.ytp-ad-persistent-progress-bar-container', '.ytp-ad-simple-ad-badge', '.ytp-ad-badge',
+    '.ytp-ad-visit-advertiser-button', '.ytp-ad-duration-remaining', '.video-ads .ytp-ad-module > *',
+].join(', ');
+
+/* Une pub est la si le lecteur se marque comme tel, ou si l'un de ses
+ * habillages de pub est a l'ecran. */
+function isAdShowing(doc, frame) {
+    if (frame && (frame.classList.contains('ad-showing') || frame.classList.contains('ad-interrupting'))) return true;
+
+    try {
+        if (frame && typeof frame.getAdState === 'function' && frame.getAdState() > 0) return true;
+    } catch (e) { /* pas cette version du lecteur */ }
+
+    return !!doc.querySelector(AD_MARKERS);
+}
+
+/* Ce que le cadre montre, en une ligne : les classes du lecteur, les
+ * elements de pub presents, le temps de la video. */
+function describeFrame(doc, frame, showing) {
+    var ads = [];
+    var all = doc.querySelectorAll('[class*="ytp-ad"], [class*="video-ads"]');
+
+    for (var i = 0; i < all.length && ads.length < 8; i++) {
+        var name = String(all[i].className).split(/\s+/)[0];
+        if (ads.indexOf(name) < 0 && all[i].offsetParent !== null) ads.push(name);
+    }
+
+    var video = doc.querySelector('.html5-main-video');
+
+    return (showing ? 'PUB' : 'pas de pub') + ' | lecteur : ' + (frame ? String(frame.className).replace(/\s+/g, ' ').slice(0, 160) : 'absent')
+        + ' | pub visibles : ' + (ads.join(' ') || 'aucun')
+        + ' | video : ' + (video ? Math.round(video.currentTime) + '/' + Math.round(video.duration) : 'absente');
+}
+
 function watchAds(player) {
     if (!player.youTubeApi || player.zm.adWatcher) return;
 
@@ -94,15 +131,23 @@ function watchAds(player) {
         }
 
         /* Une fois : le cadre est-il lisible d'ici. Sans lui, pas de saut. */
-        if (!probed && (doc || player.zm.probes++ > 20)) {
+        player.zm.probes++;
+
+        if (!probed && (doc || player.zm.probes > 20)) {
             probed = true;
             sendMessage('duiInfo', {handle: player.zm.handle, frame: !!doc});
         }
 
         if (!doc) return;
 
-        var frame = doc.querySelector('.html5-video-player');
-        var showing = !!(frame && frame.classList.contains('ad-showing'));
+        var frame = doc.querySelector('.html5-video-player') || doc.getElementById('movie_player');
+        var showing = isAdShowing(doc, frame);
+
+        /* Les vingt premieres secondes : ce que le lecteur montre, en clair,
+         * pour reconnaitre la pub telle que YouTube la marque aujourd'hui. */
+        if (player.zm.probes < 80 && player.zm.probes % 8 === 0) {
+            sendMessage('duiInfo', {handle: player.zm.handle, debug: describeFrame(doc, frame, showing)});
+        }
 
         if (showing !== player.zm.adShowing) {
             player.zm.adShowing = showing;
