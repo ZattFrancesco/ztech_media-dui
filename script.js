@@ -271,9 +271,18 @@ function initPlayer(id, handle, options) {
                     applyFilter(media);
                     media.zm.filterAdded = true;
                 }
-
-                watchAds(media);
             });
+
+            /* La pub d'ouverture joue avant que le lecteur ne dise « lecture » :
+             * on surveille des que le lecteur YouTube existe. */
+            var waitApi = setInterval(function () {
+                if (!document.getElementById(id)) return clearInterval(waitApi);
+
+                if (media.youTubeApi) {
+                    clearInterval(waitApi);
+                    watchAds(media);
+                }
+            }, 200);
 
             media.play();
         },
