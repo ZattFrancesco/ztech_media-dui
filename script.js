@@ -145,7 +145,7 @@ function watchAds(player) {
 
         /* Les vingt premieres secondes : ce que le lecteur montre, en clair,
          * pour reconnaitre la pub telle que YouTube la marque aujourd'hui. */
-        if (player.zm.probes < 80 && player.zm.probes % 8 === 0) {
+        if (player.zm.probes < 80 && player.zm.probes % 8 === 0 && (showing || player.zm.probes === 8)) {
             sendMessage('duiInfo', {handle: player.zm.handle, debug: describeFrame(doc, frame, showing)});
         }
 
@@ -230,6 +230,7 @@ function initPlayer(id, handle, options) {
                 adShowing: false,
                 adWatcher: null,
                 probes: 0,
+                started: false,
             };
             media.volume = 0;
 
@@ -374,7 +375,14 @@ function update(data) {
             player.volume = volume;
         }
 
-        if (options.duration && !player.zm.adShowing) {
+        /* La musique commence vraiment : le serveur recale son chrono, pour
+         * que tout le monde parte de zero avec celui qui a lance. */
+        if (!player.zm.started && !player.zm.adShowing && player.currentTime > 0.2) {
+            player.zm.started = true;
+            sendMessage('started', {handle: data.handle});
+        }
+
+        if (options.duration && !player.zm.adShowing && player.zm.started) {
             var expected = options.offset % player.duration;
 
             if (Math.abs(expected - player.currentTime) > MAX_DRIFT) player.currentTime = expected;
