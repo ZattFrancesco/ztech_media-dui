@@ -80,36 +80,54 @@ function applyFilter(player) {
 function watchAds(player) {
     if (!player.youTubeApi || player.zm.adWatcher) return;
 
+    var api = player.youTubeApi;
+    var probed = false;
+
     player.zm.adWatcher = setInterval(function () {
+        var doc = null;
+
         try {
-            var doc = player.youTubeApi.getIframe().contentWindow.document;
-            var frame = doc.querySelector('.html5-video-player');
-            var showing = !!(frame && frame.classList.contains('ad-showing'));
-
-            player.zm.adShowing = showing;
-
-            if (!showing) return;
-
-            var video = doc.querySelector('.html5-main-video');
-
-            if (video) {
-                video.muted = true;
-                video.volume = 0;
-                video.playbackRate = 16;
-
-                if (isFinite(video.duration) && video.duration > 0) {
-                    video.currentTime = video.duration;
-                }
-            }
-
-            var skip = doc.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button');
-            if (skip) skip.click();
-
-            var overlay = doc.querySelector('.ytp-ad-overlay-close-button');
-            if (overlay) overlay.click();
+            doc = api.getIframe().contentWindow.document;
+            if (doc && !doc.querySelector) doc = null;
         } catch (e) {
-            /* Le cadre n'est pas encore la, ou n'est pas lisible : on reessaie. */
+            doc = null;
         }
+
+        /* Une fois : le cadre est-il lisible d'ici. Sans lui, pas de saut. */
+        if (!probed && (doc || player.zm.probes++ > 20)) {
+            probed = true;
+            sendMessage('duiInfo', {handle: player.zm.handle, frame: !!doc});
+        }
+
+        if (!doc) return;
+
+        var frame = doc.querySelector('.html5-video-player');
+        var showing = !!(frame && frame.classList.contains('ad-showing'));
+
+        if (showing !== player.zm.adShowing) {
+            player.zm.adShowing = showing;
+            sendMessage('duiInfo', {handle: player.zm.handle, ad: showing});
+        }
+
+        if (!showing) return;
+
+        /* Le son est coupe par update(), qui lit adShowing ; ici on passe la
+         * pub : « Passer » des qu'il parait, sa fin pour les autres. */
+        var video = doc.querySelector('.html5-main-video');
+
+        if (video) {
+            video.playbackRate = 16;
+
+            if (isFinite(video.duration) && video.duration > 0) {
+                video.currentTime = video.duration;
+            }
+        }
+
+        var skip = doc.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button');
+        if (skip) skip.click();
+
+        var overlay = doc.querySelector('.ytp-ad-overlay-close-button');
+        if (overlay) overlay.click();
     }, AD_TICK);
 }
 
@@ -160,11 +178,13 @@ function initPlayer(id, handle, options) {
         success: function (media) {
             media.className = 'player';
             media.zm = {
+                handle: handle,
                 initialized: false,
                 attenuationFactor: options.attenuation.diffRoom,
                 volumeFactor: options.diffRoomVolume || 0.25,
                 adShowing: false,
                 adWatcher: null,
+                probes: 0,
             };
             media.volume = 0;
 
