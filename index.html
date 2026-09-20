@@ -4,12 +4,15 @@
     <meta charset="utf-8">
     <title>ztech_media</title>
     <link rel="stylesheet" href="mediaelementplayer.min.css">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=3">
     <script src="mediaelement.min.js"></script>
     <script src="twitch.min.js"></script>
     <script src="vimeo.min.js"></script>
     <script src="dailymotion.min.js"></script>
-    <script src="script.js"></script>
+    <!-- Le numero suit chaque changement de script.js : le navigateur du jeu
+         garde les fichiers dix minutes, et l'adresse de la page change a
+         chaque demarrage de la resource, pas celle des scripts. -->
+    <script src="script.js?v=3"></script>
 </head>
 <body>
     <div id="loading" style="display: none;"><img src="loading.svg" alt=""></div>
